@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<file:config name="Picking-file-config" doc:name="File Config" doc:id="203b53d2-8d0a-4bd2-93a5-409854a08485" >
+		<file:connection workingDir="C:\Users\ANJIREDDY\Desktop\customerFiles\" />
+	</file:config>
+	<file:config name="Write-files-into-GenricFolder" doc:name="File Config" doc:id="359b85ad-8606-4180-9093-a546249d61bc" >
+		<file:connection workingDir="C:\Users\ANJIREDDY\Desktop\customerFiles\Generic" />
+	</file:config>
+	<flow name="GP-files-processFlow" doc:id="62714e5d-c2e7-4d3b-baa3-ca36cda03d2e" >
+		<file:listener doc:name="Picking-files-from-GP-file-server" doc:id="2503f6d6-c6b2-47d5-b2ca-88728ea7306a" directory="GP\" autoDelete="true" config-ref="Picking-file-config">
+			<scheduling-strategy >
+				<fixed-frequency />
+			</scheduling-strategy>
+			<file:matcher filenamePattern="*.csv" />
+		</file:listener>
+		<ee:transform doc:name="Mapping-csv-json" doc:id="13754efd-4ed2-41b4-b886-35d3ae73d71e" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+ CUSTOMER_LIST : 
+   payload map((details, index) -> {
+   	 
+   		CUSTOMERID: details.CUSTOMERID,
+   		STATUS: details.STATUS,
+   		CUSTOMER_NAME:details.FIRSTNAME ++' '++ details.LASTNAME,
+   		STREETADDRESS: details.STREETADDRESS,
+   		CITY: details.CITY,
+   		STATE: details.STATE,
+   		ZIP: details.ZIP,
+   		AMOUNT:details.AMOUNT,
+   		DATEPOSTED: details.DATEPOSTED
+   		
+   	
+   	
+    })
+  
+ ]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+			</ee:variables>
+		</ee:transform>
+		<file:write doc:name="Write-file-into-generic-file-server" doc:id="0454aac6-cc9e-461d-a5de-e418b6deaa06" config-ref="Write-files-into-GenricFolder" path="#['GP_CustomerDetails_'++(now() as String {format: 'yyyy-MM-dd-hh-mm-ss'})++'.json']" mode="CREATE_NEW"/>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="c95c5271-68d1-4851-9a1c-5b1378ce2f56" type="ANY">
+				<ee:transform doc:name="Transform Message" doc:id="19ceb2af-66e7-4244-8c7b-5dd016f29096" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+"ERROR DETAILS": error.description,
+"ERROR MESSAGE":error.message
+
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+	<flow name="FPL-files-processFlow" doc:id="6791527d-6741-411d-9d6e-9d7e8f14b468" >
+		<file:listener doc:name="Picking-files-from-FPL-server" doc:id="2a0e4da8-da22-4c71-9d52-7dd6f8e39866" config-ref="Picking-file-config" directory="FPL\" autoDelete="true">
+			<scheduling-strategy >
+				<fixed-frequency />
+			</scheduling-strategy>
+			<file:matcher filenamePattern="*.xml" />
+		</file:listener>
+		<ee:transform doc:name="Mapping-Xml-json" doc:id="d83358c8-097e-465a-bad7-19b217519358" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json 
+---
+CUSTOMER_LIST:
+	 payload.FPLCustomerList.*FPLCustomer map(customer,index) -> {
+		
+	CUSTOMERID:customer.CUSTOMERID as String,
+	STATUS:customer.STATUS as String,
+	CUSTOMER_NAME: customer.FIRSTNAME ++' '++ customer.LASTNAME as String,
+	STREETADDRESS:customer.STREETADDRESS as String,
+	CITY:customer.CITY as String,
+	STATE:customer.STATE as String,
+	ZIP:customer.ZIP as String,
+	AMOUNT:customer.AMOUNT as String,
+	DATEPOSTED:customer.DATEPOSTED as String
+	}
+	]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+			</ee:variables>
+		</ee:transform>
+		<file:write doc:name="Write-file-into-generic-file-server" doc:id="f659d89e-2ab9-4d86-bbcb-e6927220d9ab" config-ref="Write-files-into-GenricFolder" path="#['FPL_CustomerDetails_'++(now() as String {format: 'yyyy-MM-dd-hh-mm-ss'})++'.json']" mode="CREATE_NEW"/>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="ad92e586-b75f-45b3-bf0f-a16cc55dd445" type="ANY">
+				<ee:transform doc:name="Transform Message" doc:id="cd49da5f-baf7-4191-918d-67b9a8dab38b" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+ERROR_DETAILS:{
+	
+	ERROR_MESSAGE: error.errorMessage,
+	ERROR_DESCRIPTION:error.description
+	
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+</mule>
